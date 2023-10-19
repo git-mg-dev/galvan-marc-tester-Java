@@ -4,6 +4,7 @@ import com.parkit.parkingsystem.dao.ParkingSpotDAO;
 import com.parkit.parkingsystem.dao.TicketDAO;
 import com.parkit.parkingsystem.integration.config.DataBaseTestConfig;
 import com.parkit.parkingsystem.integration.service.DataBasePrepareService;
+import com.parkit.parkingsystem.model.Ticket;
 import com.parkit.parkingsystem.service.ParkingService;
 import com.parkit.parkingsystem.util.InputReaderUtil;
 import org.junit.jupiter.api.AfterAll;
@@ -13,21 +14,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import static org.mockito.Mockito.when;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class ParkingDataBaseIT {
 
-    private static DataBaseTestConfig dataBaseTestConfig = new DataBaseTestConfig();
+    private static DataBaseTestConfig dataBaseTestConfig;
     private static ParkingSpotDAO parkingSpotDAO;
     private static TicketDAO ticketDAO;
     private static DataBasePrepareService dataBasePrepareService;
-
+    private static ParkingService parkingService;
+    private static final String regNumber = "ABCDEF";
     @Mock
     private static InputReaderUtil inputReaderUtil;
 
     @BeforeAll
-    private static void setUp() throws Exception{
+    public static void setUp() throws Exception{
+        dataBaseTestConfig = new DataBaseTestConfig();
         parkingSpotDAO = new ParkingSpotDAO();
         parkingSpotDAO.dataBaseConfig = dataBaseTestConfig;
         ticketDAO = new TicketDAO();
@@ -36,30 +42,80 @@ public class ParkingDataBaseIT {
     }
 
     @BeforeEach
-    private void setUpPerTest() throws Exception {
+    public void setUpPerTest() throws Exception {
         when(inputReaderUtil.readSelection()).thenReturn(1);
-        when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn("ABCDEF");
+        when(inputReaderUtil.readVehicleRegistrationNumber()).thenReturn(regNumber);
         dataBasePrepareService.clearDataBaseEntries();
+
+        parkingService = new ParkingService(inputReaderUtil, parkingSpotDAO, ticketDAO);
     }
 
     @AfterAll
-    private static void tearDown(){
+    public static void tearDown(){
 
     }
 
+    /**
+     * Checks that the ticket has been saved in DB and parking spot availability has been updated
+     * @throws Exception May throw exception when reading vehicle reg number
+     */
     @Test
-    public void testParkingACar(){
-        ParkingService parkingService = new ParkingService(inputReaderUtil, parkingSpotDAO, ticketDAO);
+    public void testParkingACar() throws Exception{
+        // GIVEN
+        // Done in setUpPerTest()
+
+        // WHEN
         parkingService.processIncomingVehicle();
-        //TODO: check that a ticket is actualy saved in DB and Parking table is updated with availability
+
+        // THEN
+        Ticket ticket = ticketDAO.getTicket(regNumber);
+        assertNotNull(ticket);
+        assertFalse(ticket.getParkingSpot().isAvailable());
     }
 
+    /**
+     * Checks that the ticket has an out time (since there already are several tests to check the fare calculation
+     * then this test doesn't check the fare price)
+     * @throws Exception May throw exception when reading vehicle reg number
+     */
     @Test
-    public void testParkingLotExit(){
+    public void testParkingLotExit() throws Exception{
+        // GIVEN
         testParkingACar();
-        ParkingService parkingService = new ParkingService(inputReaderUtil, parkingSpotDAO, ticketDAO);
+        Thread.sleep(1000);
+
+        // WHEN
         parkingService.processExitingVehicle();
         //TODO: check that the fare generated and out time are populated correctly in the database
+
+        // THEN
+        Ticket ticket = ticketDAO.getTicket(regNumber);
+        assertTrue(ticket.getOutTime().getTime() > 0);
+        // assertEquals(0.0, ticket.getPrice()); //parking time is less than 30 minutes so it's free
+    }
+
+    /**
+     * Checks that a recurring user has several tickets saved in DB, it means a discount is applied when calculating
+     * the fare price (since there already is a test to check the fare calculation with a discount, the calculation
+     * is not tested here)
+     * @throws Exception May throw exception when reading vehicle reg number
+     */
+    @Test
+    public void testParkingLotExitRecurringUser() throws Exception{
+        //TODO: doit tester le calcul du prix d’un ticket via l’appel de processIncomingVehicle et
+        // processExitingVehicle dans le cas d’un utilisateur récurrent
+
+        // GIVEN
+        testParkingLotExit();
+        parkingService.processIncomingVehicle();
+        Thread.sleep(1000);
+
+        // WHEN
+        parkingService.processExitingVehicle();
+        int numberOfTicket = ticketDAO.getNbTickets(regNumber);
+
+        // THEN
+        assertEquals(2, numberOfTicket);
     }
 
 }
