@@ -85,7 +85,6 @@ public class ParkingDataBaseIT {
 
         // WHEN
         parkingService.processExitingVehicle();
-        //TODO: check that the fare generated and out time are populated correctly in the database
 
         // THEN
         Ticket ticket = ticketDAO.getTicket(regNumber);
@@ -101,9 +100,6 @@ public class ParkingDataBaseIT {
      */
     @Test
     public void testParkingLotExitRecurringUser() throws Exception{
-        //TODO: doit tester le calcul du prix d’un ticket via l’appel de processIncomingVehicle et
-        // processExitingVehicle dans le cas d’un utilisateur récurrent
-
         // GIVEN
         testParkingLotExit();
         parkingService.processIncomingVehicle();
